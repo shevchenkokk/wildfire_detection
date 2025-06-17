@@ -40,6 +40,17 @@ python3 scripts/convert_coco_to_yolo.py
 
 3. Run script for training model
 
+YOLO
+
+```bash
+python3 src/training/train_yolo.py
+```
+
+Cascade R-CNN
+
+```bash
+python3 src/training/train_cascade_r_cnn.py
+```
 
 ## Application
 
