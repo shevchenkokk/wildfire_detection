@@ -89,13 +89,6 @@ def _merge_coco_split_data(ds1_ann_path, ds1_img_dir, ds2_ann_path, ds2_img_dir,
         'name': 'Wildfire',
         'supercategory': 'none'
     })
-    # Add "No Wildfire" category
-    no_wildfire_category_id = 2 # Assuming 1 is taken by Wildfire
-    merged_data['categories'].append({
-        'id': no_wildfire_category_id,
-        'name': 'No Wildfire',
-        'supercategory': 'none'
-    })
 
     # Create mappings from old category IDs to the new "Wildfire" category ID
     ds1_cat_id_map = {}
