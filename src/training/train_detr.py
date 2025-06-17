@@ -7,7 +7,6 @@ import sys
 import torch
 from PIL import Image
 from datasets import Dataset, DatasetDict, Features, ClassLabel, Value, Sequence
-import src.models.detr as models
 from functools import partial
 from torchmetrics.detection.mean_ap import MeanAveragePrecision
 from transformers import (
@@ -17,6 +16,7 @@ from transformers import (
 from transformers.image_transforms import center_to_corners_format
 from transformers.models.detr.modeling_detr import DetrObjectDetectionOutput
 from transformers.trainer_utils import EvalPrediction, set_seed
+import src.models.detr as models
 
 
 def create_dataset_generator(ann_file, img_dir):
@@ -114,7 +114,7 @@ def convert_bbox_yolo_to_pascal(boxes, image_size):
     return boxes
 
 
-def compute_metrics(eval_pred: EvalPrediction, id2label: dict, image_processor: AutoImageProcessor):
+def compute_metrics(eval_pred: EvalPrediction, id2label: dict, image_processor):
     """
     Computes COCO-style metrics for object detection.
     """
@@ -128,7 +128,7 @@ def compute_metrics(eval_pred: EvalPrediction, id2label: dict, image_processor: 
 
         post_processed_preds = image_processor.post_process_object_detection(
             outputs=DetrObjectDetectionOutput(logits=logits, pred_boxes=pred_boxes),
-            threshold=0.4,
+            threshold=0.2,
             target_sizes=orig_sizes
         )
 
@@ -176,6 +176,8 @@ def main(args):
     train_ann_file = os.path.join(train_dir, "_annotations.coco.json")
     val_dir = os.path.join(args.data_path, "valid")
     val_ann_file = os.path.join(val_dir, "_annotations.coco.json")
+    test_dir = os.path.join(args.data_path, "test")
+    test_ann_file = os.path.join(test_dir, "_annotations.coco.json")
 
     with open(train_ann_file, 'r') as f:
         category_names = [cat['name'] for cat in json.load(f)['categories']]
@@ -196,11 +198,14 @@ def main(args):
                                         features=features),
         "validation": Dataset.from_generator(create_dataset_generator,
                                              gen_kwargs={"ann_file": val_ann_file, "img_dir": val_dir},
-                                             features=features)
+                                             features=features),
+        "test": Dataset.from_generator(create_dataset_generator,
+                                       gen_kwargs={"ann_file": test_ann_file, "img_dir": test_dir}, features=features)
     })
 
     print(f"Train dataset size: {len(raw_datasets['train'])}")
     print(f"Validation dataset size: {len(raw_datasets['validation'])}")
+    print(f"Validation dataset size: {len(raw_datasets['test'])}")
 
     image_processor = models.get_detr_image_processor(args.model_path)
 
@@ -231,6 +236,9 @@ def main(args):
         partial(transform_aug_ann, image_processor=image_processor, transform=transform_train)
     )
     val_dataset_transformed = raw_datasets["validation"].with_transform(
+        partial(transform_aug_ann, image_processor=image_processor, transform=transform_val_test)
+    )
+    test_dataset_transformed = raw_datasets["test"].with_transform(
         partial(transform_aug_ann, image_processor=image_processor, transform=transform_val_test)
     )
 
@@ -287,7 +295,11 @@ def main(args):
         print("--- Training finished. ---")
 
     elif args.mode == 'eval':
-        model = models.get_detr_model(model_path=args.model_path)
+        model = models.get_detr_model(
+            model_path=args.model_path,
+            id2label=id2label,
+            label2id=label2id
+        )
 
         eval_args = TrainingArguments(
             output_dir=f"{args.output_dir}/eval_only",
@@ -308,6 +320,11 @@ def main(args):
 
         print("\n--- Evaluating on Val Set ---")
         metrics = trainer.evaluate(eval_dataset=val_dataset_transformed, metric_key_prefix="val")
+        print("\n--- Evaluation Metrics ---")
+        print(metrics)
+
+        print("\n--- Evaluating on Test Set ---")
+        metrics = trainer.evaluate(eval_dataset=test_dataset_transformed, metric_key_prefix="test")
         print("\n--- Evaluation Metrics ---")
         print(metrics)
 
