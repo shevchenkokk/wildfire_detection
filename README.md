@@ -52,6 +52,12 @@ Cascade R-CNN
 python3 src/training/train_cascade_r_cnn.py
 ```
 
+Deformable Detr 
+
+```bash
+python3 src/training/train_detr.py
+```
+
 ## Application
 
 Go to the following path `src/app/`
